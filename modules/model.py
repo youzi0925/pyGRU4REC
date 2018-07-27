@@ -101,10 +101,13 @@ class GRU4REC:
 
         # Start the training loop
         loader = SessionDataLoader(dataset, batch_size=self.batch_size)
-
+        # 一个bach一个bach的迭代,每次迭代是一个input:tensor([ 31,  26,  27,  29,  24]);一个output:tensor([ 31,  26,  28,  17,  24])
+        #
         for input, target, mask in loader:
             input = input.to(device)
             target = target.to(device)
+            print(input)
+            print(target)
             # reset the hidden states if some sessions have just terminated
             hidden = reset_hidden(hidden, mask).detach()
             # Go through the GRU layer

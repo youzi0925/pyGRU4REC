@@ -46,7 +46,7 @@ def main():
     test_dataset = SessionDataset(PATH_TEST, itemmap=train_dataset.itemmap)
 
     use_cuda = True
-    input_size = len(train_dataset.items)
+    input_size = len(train_dataset.items) #输入维度为总的
     hidden_size = args.hidden_size
     num_layers = args.num_layers
     output_size = input_size
