@@ -5,7 +5,7 @@ import torch
 
 
 class SessionDataset:
-    def __init__(self, path, sep='\t', session_key='SessionId', item_key='ItemId', time_key='TimeStamp', n_samples=-1,
+    def __init__(self, path, sep='\t', session_key='SessionId', item_key='ItemId', time_key='TimeStamp',
                  itemmap=None, time_sort=False):
         """
         Args:
@@ -22,8 +22,6 @@ class SessionDataset:
         self.time_key = time_key
         self.time_sort = time_sort
 
-        # sampling
-        if n_samples > 0: self.df = self.df[:n_samples]
         # Add item indices
         self.add_item_indices(itemmap=itemmap)
         """
@@ -72,13 +70,14 @@ class SessionDataset:
                                  index=item_ids)
             itemmap = pd.DataFrame({self.item_key: item_ids,
                                     'item_idx': item2idx[item_ids].values})
-
         self.itemmap = itemmap
         self.df = pd.merge(self.df, self.itemmap, on=self.item_key, how='inner')
 
     @property
     def items(self):
         return self.itemmap.ItemId.unique()
+
+
 
 
 class SessionDataLoader:
@@ -115,7 +114,7 @@ class SessionDataLoader:
         end = click_offsets[session_idx_arr[iters] + 1]
         mask = []  # indicator for the sessions to be terminated
         finished = False
-        print(df)
+        # print(df)
 
         while not finished:
             # 重要,理解,此值为一个batch中所有session的最小长度,注意,start,end为click_offsets数组
@@ -128,8 +127,8 @@ class SessionDataLoader:
                 idx_input = idx_target
                 idx_target = df.item_idx.values[start + i + 1]
                 # yield,所有此print为最终循环输出
-                print(idx_input)  # len为batch-size  [31 26 27 29 24]
-                print(idx_target)  # len为batch-size  [31 26 28 17 24]
+                # print(idx_input)  # len为batch-size  [31 26 27 29 24]
+                # print(idx_target)  # len为batch-size  [31 26 28 17 24]
                 input = torch.LongTensor(idx_input)
                 target = torch.LongTensor(idx_target)
                 yield input, target, mask

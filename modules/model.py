@@ -15,7 +15,8 @@ class GRU4REC:
                  optimizer_type='Adagrad', lr=.01, weight_decay=0,
                  momentum=0, eps=1e-6, loss_type='TOP1',
                  clip_grad=-1, dropout_input=.0, dropout_hidden=.5,
-                 batch_size=50, use_cuda=True, time_sort=False, pretrained=None):
+                 batch_size=50, use_cuda=True, time_sort=False, pretrained=None,
+                 n_sample=2048, sample_alpha=0.75, sample_store=10000000):
         """ The GRU4REC model
 
         Args:
@@ -45,6 +46,11 @@ class GRU4REC:
         self.batch_size = batch_size
         self.use_cuda = use_cuda
         self.device = torch.device('cuda' if use_cuda else 'cpu')
+        ###修改###
+        self.n_sample = n_sample
+        self.sample_alpha = sample_alpha
+        self.sample_store = sample_store
+        ###修改###
         if pretrained is None:
             self.gru = GRU(input_size, hidden_size, output_size, num_layers,
                            dropout_input=dropout_input,
@@ -76,8 +82,17 @@ class GRU4REC:
 
         # etc
         self.time_sort = time_sort
-        
-        
+
+    def generate_neg_samples(self, n_items, pop, length):
+        if self.sample_alpha:
+            sample = np.searchsorted(pop, np.random.rand(self.n_sample * length))
+        else:
+            # 从 np.arange(n_items) 中产生一个size为n_sample * length的随机采样
+            sample = np.random.choice(n_items, size=self.n_sample * length)
+        if length > 1:
+            sample = sample.reshape((length, self.n_sample))
+        return sample
+
     def run_epoch(self, dataset, k=20, training=True):
         """ Run a single training epoch """
         start_time = time.time()
@@ -103,17 +118,54 @@ class GRU4REC:
         loader = SessionDataLoader(dataset, batch_size=self.batch_size)
         # 一个bach一个bach的迭代,每次迭代是一个input:tensor([ 31,  26,  27,  29,  24]);一个output:tensor([ 31,  26,  28,  17,  24])
         #
+        if training==True:
+            n_items = len(dataset.items)
+            # sampling 增加额外负样本采样
+            if self.n_sample > 0:
+                pop = dataset.df.groupby('ItemId').size()  # item的流行度supp,数据如下格式
+                # ItemId
+                # 214507331  1
+                # 214507365  1
+                # 将sample_alpha设置为1会导致基于流行度的采样，将其设置为0会导致均匀采样
+                pop = pop[dataset.itemmap[
+                    dataset.item_key].values].values ** self.sample_alpha  # item选择作为样本的概率为supp ^ sample_alpha
+                pop = pop.cumsum() / pop.sum()
+                pop[-1] = 1
+                if self.sample_store:
+                    generate_length = self.sample_store // self.n_sample
+                    if generate_length <= 1:
+                        sample_store = 0
+                        print('No example store was used')
+                    else:
+                        neg_samples = self.generate_neg_samples(n_items, pop, generate_length)
+                        sample_pointer = 0
+                else:
+                    print('No example store was used')
+
         for input, target, mask in loader:
             input = input.to(device)
             target = target.to(device)
-            print(input)
-            print(target)
+            # print(input)
+            # print(target)
+            #额外的 SAMPLING THE OUTPUT
+            if self.n_sample and training:
+                if self.sample_store:
+                    if sample_pointer == generate_length:
+                        neg_samples = self.generate_neg_samples(n_items, pop, generate_length)
+                        sample_pointer = 0
+                    sample = neg_samples[sample_pointer]
+                    sample_pointer += 1
+                else:
+                    sample = self.generate_neg_samples(pop, 1)
+                y = np.hstack([target, sample])
+            else:
+                y = target   #不增加额外采样
             # reset the hidden states if some sessions have just terminated
             hidden = reset_hidden(hidden, mask).detach()
             # Go through the GRU layer
             logit, hidden = self.gru(input, target, hidden)
-            # Output sampling
-            logit_sampled = logit[:, target.view(-1)]
+            # Output sampling   #理解,很重要！！！！！！！
+            logit_sampled = logit[:, y]
             # Calculate the mini-batch loss
             loss = self.loss_fn(logit_sampled)
             with torch.no_grad():
@@ -145,8 +197,7 @@ class GRU4REC:
 
         return results
     
-    
-    def train(self, dataset, k=20, n_epochs=10, save_dir='./models', save=True, model_name='GRU4REC'):
+    def train(self, dataset, k=20, n_epochs=10, save_dir='./models', sample_store=10000000, save=True, model_name='GRU4REC'):
         """
         Train the GRU4REC model on a pandas dataframe for several training epochs,
         and store the intermediate models to the user-specified directory.
@@ -157,6 +208,7 @@ class GRU4REC:
             model_name (str): name of the model
         """
         print(f'Training {model_name}...')
+
         for epoch in range(n_epochs):
             results = self.run_epoch(dataset, k=k, training=True)
             results = [f'{k}:{v:.3f}' for k, v in results.items()]

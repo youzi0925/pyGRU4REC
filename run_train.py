@@ -25,12 +25,17 @@ def main():
     parser.add_argument('--eps', default=1e-6, type=float)
     
     # parse the loss type
-    parser.add_argument('--loss_type', default='TOP1', type=str)
+    parser.add_argument('--loss_type', default='CrossEntropy', type=str)
     
     # etc
     parser.add_argument('--n_epochs', default=5, type=int)
     parser.add_argument('--time_sort', default=False, type=bool)
     parser.add_argument('--model_name', default='GRU4REC', type=str)
+
+    #sample
+    parser.add_argument('--n_sample', default=15, type=int)
+    parser.add_argument('--sample_alpha', default=0, type=float)
+    parser.add_argument('--sample_store', default=5120, type=int)
     
     # Get the arguments
     args = parser.parse_args()    
@@ -45,7 +50,7 @@ def main():
     train_dataset = SessionDataset(PATH_TRAIN)
     test_dataset = SessionDataset(PATH_TEST, itemmap=train_dataset.itemmap)
 
-    use_cuda = True
+    use_cuda = False
     input_size = len(train_dataset.items) #输入维度为总的
     hidden_size = args.hidden_size
     num_layers = args.num_layers
@@ -65,11 +70,15 @@ def main():
     n_epochs = args.n_epochs
     time_sort = args.time_sort
 
+    n_sample = args.n_sample
+    sample_alpha = args.sample_alpha
+    sample_store = args.sample_store
+
     torch.manual_seed(7)
 
     model = GRU4REC(input_size, hidden_size, output_size,
                     num_layers=num_layers,
-                    use_cuda=False,
+                    use_cuda=use_cuda,
                     batch_size=batch_size,
                     loss_type=loss_type,
                     optimizer_type=optimizer_type,
@@ -79,7 +88,10 @@ def main():
                     eps=eps,
                     dropout_input=dropout_input,
                     dropout_hidden=dropout_hidden,
-                    time_sort=time_sort)
+                    time_sort=time_sort,
+                    n_sample=n_sample,
+                    sample_alpha=sample_alpha,
+                    sample_store=sample_store)
     
     model.train(train_dataset, k=20, n_epochs=n_epochs, model_name=args.model_name, save=True, save_dir=PATH_MODEL)
     model.test(test_dataset, k=20)
