@@ -20,7 +20,7 @@ class LossFunction(nn.Module):
         elif loss_type == 'TOP1_Max':
             self._loss_fn = TOP1_MaxLoss()
         elif loss_type == 'BPR_Max':
-            self._loss_fn = BPR_MaxLoss()
+            self._loss_fn = BPR_MaxLoss(bpreg)
         else:
             raise NotImplementedError
 
@@ -44,7 +44,8 @@ class SampledCrossEntropyLoss(nn.Module):
     def forward(self, logit):
         batch_size = logit.size(0)
         target = Variable(torch.arange(batch_size).long())
-        if self.use_cuda: target = target.cuda()
+        self.device = torch.device('cuda' if self.use_cuda else 'cpu')
+        target = target.to(self.device)
         #Fixing the instability 避免log0
         logit = logit + 1e-24
         return self.xe_loss(logit, target)
@@ -73,8 +74,10 @@ class BPRLoss(nn.Module):
         return loss
 
 class BPR_MaxLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, bpreg):
+
         super().__init__()
+        self.bpreg = bpreg
 
     def forward(self, logit):
         """
@@ -83,13 +86,16 @@ class BPR_MaxLoss(nn.Module):
                          The first dimension corresponds to the batches, and the second
                          dimension corresponds to sampled number of items to evaluate
         """
-        self.bpreg = 1.0
+
         softmax_scores = F.softmax(logit, 1)
         # differences between the item scores
         diff = logit.diag().view(-1, 1).expand_as(logit) - logit
         # final loss
-        loss = -F.logsigmoid(diff)*softmax_scores + self.bpreg*(logit ** 2)*softmax_scores
-        loss = torch.sum(loss).mean()
+        # loss = -F.logsigmoid(diff)*softmax_scores + self.bpreg*(logit ** 2)*softmax_scores
+        # loss = torch.sum(loss, 1).mean()
+
+        loss = F.sigmoid(diff) * softmax_scores
+        loss = (-torch.log(torch.sum(loss, 1) + 1e-24) + torch.sum(self.bpreg*(logit ** 2)*softmax_scores, 1)).mean()
 
         return loss
 

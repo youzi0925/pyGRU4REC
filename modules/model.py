@@ -16,7 +16,7 @@ class GRU4REC:
                  momentum=0, eps=1e-6, loss_type='TOP1',
                  clip_grad=-1, dropout_input=.0, dropout_hidden=.5,
                  batch_size=50, use_cuda=True, time_sort=False, pretrained=None,
-                 n_sample=2048, sample_alpha=0.75, sample_store=10000000):
+                 n_sample=2048, sample_alpha=0.75, sample_store=10000000, bpreg=1.0):
         """ The GRU4REC model
 
         Args:
@@ -50,6 +50,7 @@ class GRU4REC:
         self.n_sample = n_sample
         self.sample_alpha = sample_alpha
         self.sample_store = sample_store
+        self.bpreg = bpreg
         ###修改###
         if pretrained is None:
             self.gru = GRU(input_size, hidden_size, output_size, num_layers,
@@ -101,6 +102,9 @@ class GRU4REC:
         losses = []
         recalls = []
         mrrs = []
+        ##增加###
+        zippers = []
+        ##增加###
         optimizer = self.optimizer
         hidden = self.gru.init_hidden()
         if not training:
@@ -148,7 +152,7 @@ class GRU4REC:
             # print(input)
             # print(target)
             #额外的 SAMPLING THE OUTPUT
-            if self.n_sample and training:
+            if self.n_sample>0 and training:
                 if self.sample_store:
                     if sample_pointer == generate_length:
                         neg_samples = self.generate_neg_samples(n_items, pop, generate_length)
@@ -157,7 +161,7 @@ class GRU4REC:
                     sample_pointer += 1
                 else:
                     sample = self.generate_neg_samples(pop, 1)
-                y = np.hstack([target, sample])
+                y = torch.LongTensor(np.hstack([target, sample]))
             else:
                 y = target   #不增加额外采样
             # reset the hidden states if some sessions have just terminated
@@ -165,6 +169,7 @@ class GRU4REC:
             # Go through the GRU layer
             logit, hidden = self.gru(input, target, hidden)
             # Output sampling   #理解,很重要！！！！！！！
+            y = y.to(device)
             logit_sampled = logit[:, y]
             # Calculate the mini-batch loss
             loss = self.loss_fn(logit_sampled)
@@ -197,7 +202,7 @@ class GRU4REC:
 
         return results
     
-    def train(self, dataset, k=20, n_epochs=10, save_dir='./models', sample_store=10000000, save=True, model_name='GRU4REC'):
+    def train(self, dataset, k=20, n_epochs=10, save_dir='./models', save=True, model_name='GRU4REC'):
         """
         Train the GRU4REC model on a pandas dataframe for several training epochs,
         and store the intermediate models to the user-specified directory.

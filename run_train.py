@@ -25,7 +25,7 @@ def main():
     parser.add_argument('--eps', default=1e-6, type=float)
     
     # parse the loss type
-    parser.add_argument('--loss_type', default='CrossEntropy', type=str)
+    parser.add_argument('--loss_type', default='BPR_Max', type=str)
     
     # etc
     parser.add_argument('--n_epochs', default=5, type=int)
@@ -33,8 +33,8 @@ def main():
     parser.add_argument('--model_name', default='GRU4REC', type=str)
 
     #sample
-    parser.add_argument('--n_sample', default=15, type=int)
-    parser.add_argument('--sample_alpha', default=0, type=float)
+    parser.add_argument('--n_sample', default=5, type=int)
+    parser.add_argument('--sample_alpha', default=1, type=float)
     parser.add_argument('--sample_store', default=5120, type=int)
     
     # Get the arguments

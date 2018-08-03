@@ -40,6 +40,12 @@ def get_mrr(indices, targets):
     
     return mrr
 
+# def getZipper(logits,k=5):
+#     #Args:
+#     #   logits(B, C): torch.LongTensor.The predicted logit for the next items.
+#     #Return:
+#     #   zipper (string) : the item zipper
+#     scores, indices = torch.topk(logits, k, -1)
 
 def evaluate(logits, targets, k=20):
     """ Evaluates the model using Recall@K, MRR@K scores.
